@@ -1,0 +1,11 @@
+#This file contains general guidelines for ai code generation
+
+0. elegance always pays off
+1. this file contains instructions and guidelines for AI generated code throughout the project
+2. generated code will be consumed by LLM based coding tools
+3. generated code should be human readable like a book, use pharahraphs and chapters for long code to express abstractions
+4. keep it simple
+5. use short names, stick to the domain model and ontology names in all components, use names that would help LLM based code tools
+6. generate short comments
+7. for Kotlin code guidelines read ai_kotlin_guidlines.txt
+8. code will change and morph continously, prefer top level function testing
