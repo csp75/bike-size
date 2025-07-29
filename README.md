@@ -8,22 +8,27 @@ This application processes bicycle images to detect wheels using HoughCircles an
 
 ## Features
 
-- **Wheel Detection**: Uses HoughCircles algorithm to detect bicycle wheels
+- **Wheel Detection**: Uses HoughCircles algorithm to detect bicycle wheels with adaptive parameters for different aspect ratios
 - **Frame Detection**: Uses Line Segment Detector (LSD) to identify frame tubes
 - **Geometry Calculations**: Computes wheelbase, wheel diameters, and perspective correction
 - **Visualization**: Generates annotated images with detection overlays
 - **JSON Output**: Structured results with confidence scores and measurements
 - **Error Handling**: Graceful handling of detection failures and missing components
+- **URL Support**: Download and process images directly from web URLs
+- **Simplified CLI**: Use image path/URL as first argument without flags
+- **Aspect Ratio Adaptive**: Optimized detection parameters for various image dimensions
 
 ## Requirements
 
 - **Java**: JDK 11 or higher
 - **Gradle**: 7.0 or higher (included via wrapper)
 - **Input Images**: 
-  - Format: JPEG or PNG
+  - **Local files**: JPEG or PNG format
+  - **URLs**: Direct links to JPEG or PNG images (http:// or https://)
   - Recommended resolution: 1024x768 to 4096x3072 pixels
   - Clear side view of bicycle with good lighting
   - Minimal background clutter for best results
+  - **Aspect ratio adaptive**: Works well with various aspect ratios including wide images
 
 ## Installation
 
@@ -47,24 +52,40 @@ cd bike-size
 
 ### Command Line Interface
 
+#### Simplified Usage (Recommended)
 ```bash
-./gradlew run --args="--input <image_path> [--output <output_dir>]"
+./gradlew run --args="<image_path_or_url> [--output <output_dir>]"
+```
+
+#### Traditional Usage
+```bash
+./gradlew run --args="--input <image_path_or_url> [--output <output_dir>]"
 ```
 
 #### Options
 
-- `--input <path>`: Path to input bicycle image (required)
+- `<path_or_url>`: Path to input bicycle image or image URL (if first argument)
+- `--input <path>`: Path to input bicycle image or image URL (required if not first argument)
 - `--output <path>`: Output directory for results (default: ./results)
 - `--help`, `-h`: Show help message
 
 #### Examples
 
 ```bash
-# Basic usage
-./gradlew run --args="--input ./samples/bike1.jpg"
+# Simplified usage with local file
+./gradlew run --args="./images/bike1.jpg"
+
+# Simplified usage with URL
+./gradlew run --args="https://example.com/bike.jpg"
 
 # Specify output directory
-./gradlew run --args="--input ./samples/bike1.jpg --output ./my_results/"
+./gradlew run --args="./images/bike1.jpg --output ./my_results/"
+
+# Traditional format
+./gradlew run --args="--input ./images/bike1.jpg --output ./my_results/"
+
+# URL with output directory
+./gradlew run --args="https://example.com/bike.jpg --output ./url_results/"
 
 # Show help
 ./gradlew run --args="--help"
