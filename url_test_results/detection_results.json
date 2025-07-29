@@ -1,0 +1,23 @@
+{
+  "detection_results" : {
+    "wheels_found" : 2,
+    "wheel_positions" : [ {
+      "x" : 180,
+      "y" : 505,
+      "radius" : 160
+    }, {
+      "x" : 117,
+      "y" : 66,
+      "radius" : 29
+    } ],
+    "frame_tubes_found" : 10,
+    "measurements" : {
+      "wheelbase_pixels" : 443,
+      "average_wheel_diameter_pixels" : 189
+    },
+    "confidence_scores" : {
+      "wheel_detection" : "0.52",
+      "frame_detection" : "0.73"
+    }
+  }
+}

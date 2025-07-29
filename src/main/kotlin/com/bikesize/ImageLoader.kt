@@ -1,37 +1,47 @@
 package com.bikesize
 
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.IOException
+import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Handles image loading and preprocessing operations.
  */
 class ImageLoader {
     private val logger = LoggerFactory.getLogger(ImageLoader::class.java)
+    private val httpClient = OkHttpClient()
 
     /**
-     * Loads an image from file and performs preprocessing.
+     * Loads an image from file path or URL and performs preprocessing.
      * 
-     * @param filePath Path to the input image file
+     * @param inputPath Path to the input image file or URL
      * @return ImageData containing original and processed versions
      * @throws IllegalArgumentException if file doesn't exist or can't be loaded
      */
-    fun loadAndPreprocess(filePath: String): ImageData {
-        val file = File(filePath)
-        if (!file.exists()) {
-            throw IllegalArgumentException("Input file does not exist: $filePath")
+    fun loadAndPreprocess(inputPath: String): ImageData {
+        val isUrl = inputPath.startsWith("http://") || inputPath.startsWith("https://")
+        val filePath = if (isUrl) {
+            downloadImageFromUrl(inputPath)
+        } else {
+            validateLocalFile(inputPath)
+            inputPath
         }
 
-        logger.info("Loading image from: $filePath")
+        logger.info("Loading image from: $inputPath")
         
         // Load the original image
         val originalImage = Imgcodecs.imread(filePath, Imgcodecs.IMREAD_COLOR)
         if (originalImage.empty()) {
-            throw IllegalArgumentException("Failed to load image: $filePath")
+            throw IllegalArgumentException("Failed to load image: $inputPath")
         }
 
         // Validate image dimensions
@@ -63,8 +73,62 @@ class ImageLoader {
             preprocessed = blurredImage,
             width = width,
             height = height,
-            filePath = filePath
+            filePath = inputPath,
+            isUrl = isUrl,
+            localFilePath = filePath
         )
+    }
+
+    /**
+     * Validates that a local file exists.
+     */
+    private fun validateLocalFile(filePath: String) {
+        val file = File(filePath)
+        if (!file.exists()) {
+            throw IllegalArgumentException("Input file does not exist: $filePath")
+        }
+    }
+
+    /**
+     * Downloads an image from URL to a temporary file.
+     */
+    private fun downloadImageFromUrl(url: String): String {
+        try {
+            logger.info("Downloading image from URL: $url")
+            
+            val request = Request.Builder()
+                .url(url)
+                .build()
+            
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Failed to download image: HTTP ${response.code}")
+                }
+                
+                val contentType = response.header("Content-Type")
+                val extension = when {
+                    contentType?.contains("jpeg") == true || contentType?.contains("jpg") == true -> "jpg"
+                    contentType?.contains("png") == true -> "png"
+                    url.lowercase().endsWith(".jpg") || url.lowercase().endsWith(".jpeg") -> "jpg"
+                    url.lowercase().endsWith(".png") -> "png"
+                    else -> "jpg" // default
+                }
+                
+                // Create temporary file
+                val tempFile = Files.createTempFile("bike_image_", ".$extension").toFile()
+                tempFile.deleteOnExit()
+                
+                response.body?.byteStream()?.use { inputStream ->
+                    Files.copy(inputStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                }
+                
+                logger.info("Image downloaded to temporary file: ${tempFile.absolutePath}")
+                return tempFile.absolutePath
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to download image from URL: $url", e)
+            throw IllegalArgumentException("Failed to download image from URL: $url - ${e.message}", e)
+        }
     }
 
     /**
@@ -76,6 +140,8 @@ class ImageLoader {
         val preprocessed: Mat,
         val width: Int,
         val height: Int,
-        val filePath: String
+        val filePath: String,
+        val isUrl: Boolean = false,
+        val localFilePath: String = filePath
     )
 }
