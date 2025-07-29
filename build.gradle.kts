@@ -35,6 +35,14 @@ application {
     mainClass.set("com.bikesize.BikeGeometryDetectorKt")
 }
 
+tasks.jar {
+    manifest {
+        attributes["Main-Class"] = "com.bikesize.BikeGeometryDetectorKt"
+    }
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.run.configure {
     args = if (project.hasProperty("appArgs")) {
         (project.property("appArgs") as String).split(" ")
