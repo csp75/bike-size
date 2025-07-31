@@ -134,7 +134,7 @@ class BikeGeometryDetector {
                     }
                 }
                 "--debug" -> {
-                    debugMode = true
+                    // Debug mode flag handled, but not used in this simple parser
                 }
                 "--help", "-h" -> {
                     printUsage()
@@ -147,19 +147,7 @@ class BikeGeometryDetector {
             i++
         }
         
-        if (inputPath == null) {
-            logger.error("Input path is required")
-            printUsage()
-            exitProcess(1)
-        }
-        
-        val outputDir = outputPath ?: "./results"
-        
-        return AppConfig(
-            inputPath = inputPath,
-            outputPath = outputDir,
-            debugMode = debugMode
-        )
+        return output
     }
 
     /**

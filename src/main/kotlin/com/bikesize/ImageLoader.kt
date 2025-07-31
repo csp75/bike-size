@@ -31,12 +31,12 @@ class ImageLoader {
     /**
      * Loads an image from file and performs preprocessing.
      * 
-     * @param filePath Path to the input image file
-     * @param config Application configuration including debug settings
+     * @param inputPath Path to the input image file or URL
+     * @param appConfig Application configuration including debug settings
      * @return ImageData containing original and processed versions
      * @throws IllegalArgumentException if file doesn't exist or can't be loaded
      */
-    fun loadAndPreprocess(inputPath: String): ImageData {
+    fun loadAndPreprocess(inputPath: String, appConfig: BikeGeometryDetector.AppConfig): ImageData {
         val isUrl = inputPath.startsWith("http://") || inputPath.startsWith("https://")
         val filePath = if (isUrl) {
             downloadImageFromUrl(inputPath)
