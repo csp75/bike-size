@@ -189,6 +189,42 @@ class BikeGeometryDetectorTest {
         assertEquals(true, config.debugMode)
     }
 
+    @Test
+    fun `test argument parsing with debug flag`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("images/test.jpg", "--debug")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("images/test.jpg", result.inputPath)
+        assertEquals("./results", result.outputPath)
+        assertEquals(true, result.debugMode)
+    }
+
+    @Test
+    fun `test argument parsing with traditional format and debug flag`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("--input", "images/test.jpg", "--output", "test_output", "--debug")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("images/test.jpg", result.inputPath)
+        assertEquals("test_output", result.outputPath)
+        assertEquals(true, result.debugMode)
+    }
+
+    @Test
+    fun `test argument parsing without debug flag defaults to false`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("--input", "images/test.jpg")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("images/test.jpg", result.inputPath)
+        assertEquals("./results", result.outputPath)
+        assertEquals(false, result.debugMode)
+    }
+
     private fun createMockImageData(): ImageLoader.ImageData {
         // This creates a minimal mock object for testing
         // In a real test, you might want to create actual Mat objects
