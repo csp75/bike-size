@@ -66,32 +66,40 @@ class BikeGeometryDetector {
         var inputPath: String? = null
         var outputPath: String? = null
         
-        var i = 0
-        while (i < args.size) {
-            when (args[i]) {
-                "--input" -> {
-                    if (i + 1 < args.size) {
-                        inputPath = args[++i]
-                    } else {
-                        throw IllegalArgumentException("--input requires a value")
+        // Check if first argument is a direct path/URL (doesn't start with --)
+        if (args.isNotEmpty() && !args[0].startsWith("--")) {
+            inputPath = args[0]
+            // Parse remaining arguments starting from index 1
+            outputPath = parseRemainingArguments(args, 1)
+        } else {
+            // Original parsing logic for --input format
+            var i = 0
+            while (i < args.size) {
+                when (args[i]) {
+                    "--input" -> {
+                        if (i + 1 < args.size) {
+                            inputPath = args[++i]
+                        } else {
+                            throw IllegalArgumentException("--input requires a value")
+                        }
+                    }
+                    "--output" -> {
+                        if (i + 1 < args.size) {
+                            outputPath = args[++i]
+                        } else {
+                            throw IllegalArgumentException("--output requires a value")
+                        }
+                    }
+                    "--help", "-h" -> {
+                        printUsage()
+                        exitProcess(0)
+                    }
+                    else -> {
+                        logger.warn("Unknown argument: ${args[i]}")
                     }
                 }
-                "--output" -> {
-                    if (i + 1 < args.size) {
-                        outputPath = args[++i]
-                    } else {
-                        throw IllegalArgumentException("--output requires a value")
-                    }
-                }
-                "--help", "-h" -> {
-                    printUsage()
-                    exitProcess(0)
-                }
-                else -> {
-                    logger.warn("Unknown argument: ${args[i]}")
-                }
+                i++
             }
-            i++
         }
         
         if (inputPath == null) {
@@ -109,20 +117,55 @@ class BikeGeometryDetector {
     }
 
     /**
+     * Parses remaining arguments after the first path/URL argument.
+     */
+    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): String? {
+        var output: String? = null
+        
+        var i = startIndex
+        while (i < args.size) {
+            when (args[i]) {
+                "--output" -> {
+                    if (i + 1 < args.size) {
+                        output = args[++i]
+                    } else {
+                        throw IllegalArgumentException("--output requires a value")
+                    }
+                }
+                "--help", "-h" -> {
+                    printUsage()
+                    exitProcess(0)
+                }
+                else -> {
+                    logger.warn("Unknown argument: ${args[i]}")
+                }
+            }
+            i++
+        }
+        
+        return output
+    }
+
+    /**
      * Prints usage information.
      */
     private fun printUsage() {
         println("""
             Bike Geometry Detector
             
-            Usage: java -jar bike-geometry-detector.jar --input <image_path> [--output <output_dir>]
+            Usage: 
+              java -jar bike-geometry-detector.jar <image_path_or_url> [--output <output_dir>]
+              java -jar bike-geometry-detector.jar --input <image_path_or_url> [--output <output_dir>]
             
             Options:
-              --input <path>    Path to input bicycle image (required)
+              <path_or_url>     Path to input bicycle image or image URL (if first argument)
+              --input <path>    Path to input bicycle image or image URL (required if not first argument)
               --output <path>   Output directory for results (default: ./results)
               --help, -h        Show this help message
             
-            Example:
+            Examples:
+              java -jar bike-geometry-detector.jar ./samples/bike1.jpg
+              java -jar bike-geometry-detector.jar https://example.com/bike.jpg --output ./results/
               java -jar bike-geometry-detector.jar --input ./samples/bike1.jpg --output ./results/
         """.trimIndent())
     }
