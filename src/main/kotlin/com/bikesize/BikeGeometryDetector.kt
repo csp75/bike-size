@@ -67,19 +67,68 @@ class BikeGeometryDetector {
         var outputPath: String? = null
         var debugMode = false
         
-        var i = 0
-        while (i < args.size) {
-            when (args[i]) {
-                "--input" -> {
-                    if (i + 1 < args.size) {
-                        inputPath = args[++i]
-                    } else {
-                        throw IllegalArgumentException("--input requires a value")
+        // Check if first argument is a direct path/URL (doesn't start with --)
+        if (args.isNotEmpty() && !args[0].startsWith("--")) {
+            inputPath = args[0]
+            // Parse remaining arguments starting from index 1
+            outputPath = parseRemainingArguments(args, 1)
+        } else {
+            // Original parsing logic for --input format
+            var i = 0
+            while (i < args.size) {
+                when (args[i]) {
+                    "--input" -> {
+                        if (i + 1 < args.size) {
+                            inputPath = args[++i]
+                        } else {
+                            throw IllegalArgumentException("--input requires a value")
+                        }
+                    }
+                    "--output" -> {
+                        if (i + 1 < args.size) {
+                            outputPath = args[++i]
+                        } else {
+                            throw IllegalArgumentException("--output requires a value")
+                        }
+                    }
+                    "--help", "-h" -> {
+                        printUsage()
+                        exitProcess(0)
+                    }
+                    else -> {
+                        logger.warn("Unknown argument: ${args[i]}")
                     }
                 }
+                i++
+            }
+        }
+        
+        if (inputPath == null) {
+            logger.error("Input path is required")
+            printUsage()
+            exitProcess(1)
+        }
+        
+        val outputDir = outputPath ?: "./results"
+        
+        return AppConfig(
+            inputPath = inputPath,
+            outputPath = outputDir
+        )
+    }
+
+    /**
+     * Parses remaining arguments after the first path/URL argument.
+     */
+    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): String? {
+        var output: String? = null
+        
+        var i = startIndex
+        while (i < args.size) {
+            when (args[i]) {
                 "--output" -> {
                     if (i + 1 < args.size) {
-                        outputPath = args[++i]
+                        output = args[++i]
                     } else {
                         throw IllegalArgumentException("--output requires a value")
                     }
@@ -123,7 +172,8 @@ class BikeGeometryDetector {
             Usage: java -jar bike-geometry-detector.jar --input <image_path> [--output <output_dir>] [--debug]
             
             Options:
-              --input <path>    Path to input bicycle image (required)
+              <path_or_url>     Path to input bicycle image or image URL (if first argument)
+              --input <path>    Path to input bicycle image or image URL (required if not first argument)
               --output <path>   Output directory for results (default: ./results)
               --debug           Enable verbose output and save intermediate images
               --help, -h        Show this help message

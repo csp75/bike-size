@@ -27,3 +27,8 @@ results/*
 !results/.gitkeep
 samples/*
 !samples/.gitkeep
+
+# Test output directories
+sample_results/
+url_test_results/
+improved_results/

@@ -37,15 +37,33 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
         val circles = Mat()
         val image = imageData.preprocessed
         val imageHeight = imageData.height
+        val imageWidth = imageData.width
         
-        // Calculate dynamic parameters based on image size
-        val minDist = (imageHeight * config.houghCirclesMinDist).toInt()
-        val minRadius = (imageHeight * config.houghCirclesMinRadius).toInt()
-        val maxRadius = (imageHeight * config.houghCirclesMaxRadius).toInt()
+        // Use adaptive scaling based on image dimensions and aspect ratio
+        val aspectRatio = imageWidth.toDouble() / imageHeight.toDouble()
+        val scalingDimension = if (aspectRatio > 1.5) {
+            // For wide images, use a combination of width and height for better scaling
+            sqrt(imageWidth * imageHeight.toDouble()).toInt()
+        } else {
+            // For more square images, use height as before
+            imageHeight
+        }
+        
+        // Adjust param2 for wide images to be more sensitive
+        val adaptiveParam2 = if (aspectRatio > 1.5) {
+            config.houghCirclesParam2 * 0.8 // More sensitive for wide images
+        } else {
+            config.houghCirclesParam2
+        }
+        
+        // Calculate dynamic parameters based on adaptive scaling
+        val minDist = (scalingDimension * config.houghCirclesMinDist).toInt()
+        val minRadius = (scalingDimension * config.houghCirclesMinRadius).toInt()
+        val maxRadius = (scalingDimension * config.houghCirclesMaxRadius).toInt()
         
         logger.debug("HoughCircles parameters: dp=${config.houghCirclesDp}, minDist=$minDist, " +
-                    "param1=${config.houghCirclesParam1}, param2=${config.houghCirclesParam2}, " +
-                    "minRadius=$minRadius, maxRadius=$maxRadius")
+                    "param1=${config.houghCirclesParam1}, param2=$adaptiveParam2, " +
+                    "minRadius=$minRadius, maxRadius=$maxRadius, aspectRatio=$aspectRatio")
 
         // Apply HoughCircles detection
         Imgproc.HoughCircles(
@@ -55,7 +73,7 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
             config.houghCirclesDp,
             minDist.toDouble(),
             config.houghCirclesParam1,
-            config.houghCirclesParam2,
+            adaptiveParam2,
             minRadius,
             maxRadius
         )

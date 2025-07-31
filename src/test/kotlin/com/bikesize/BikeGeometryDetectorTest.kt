@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import nu.pattern.OpenCV
 
 class BikeGeometryDetectorTest {
@@ -49,6 +50,51 @@ class BikeGeometryDetectorTest {
         assertThrows<IllegalArgumentException> {
             imageLoader.loadAndPreprocess("non_existent_file.jpg", mockConfig)
         }
+    }
+
+    @Test
+    fun `test ImageLoader with valid local file`() {
+        val imageLoader = ImageLoader()
+        val imageData = imageLoader.loadAndPreprocess("images/basso.jpg")
+        
+        assertTrue(imageData.width > 0)
+        assertTrue(imageData.height > 0)
+        assertEquals("images/basso.jpg", imageData.filePath)
+        assertFalse(imageData.isUrl)
+        assertEquals("images/basso.jpg", imageData.localFilePath)
+    }
+
+    @Test
+    fun `test argument parsing with direct path as first argument`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("images/basso.jpg")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("images/basso.jpg", result.inputPath)
+        assertEquals("./results", result.outputPath)
+    }
+
+    @Test 
+    fun `test argument parsing with URL as first argument`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("https://example.com/bike.jpg", "--output", "custom_output")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("https://example.com/bike.jpg", result.inputPath)
+        assertEquals("custom_output", result.outputPath)
+    }
+
+    @Test
+    fun `test argument parsing with traditional --input format`() {
+        val detector = BikeGeometryDetector()
+        val result = detector.javaClass.getDeclaredMethod("parseArguments", Array<String>::class.java).apply {
+            isAccessible = true
+        }.invoke(detector, arrayOf("--input", "images/test.jpg", "--output", "test_output")) as BikeGeometryDetector.AppConfig
+        
+        assertEquals("images/test.jpg", result.inputPath)
+        assertEquals("test_output", result.outputPath)
     }
 
     @Test
