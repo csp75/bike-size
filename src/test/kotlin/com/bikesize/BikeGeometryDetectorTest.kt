@@ -55,7 +55,12 @@ class BikeGeometryDetectorTest {
     @Test
     fun `test ImageLoader with valid local file`() {
         val imageLoader = ImageLoader()
-        val imageData = imageLoader.loadAndPreprocess("images/basso.jpg")
+        val mockConfig = BikeGeometryDetector.AppConfig(
+            inputPath = "images/basso.jpg",
+            outputPath = "./results",
+            debugMode = false
+        )
+        val imageData = imageLoader.loadAndPreprocess("images/basso.jpg", mockConfig)
         
         assertTrue(imageData.width > 0)
         assertTrue(imageData.height > 0)
