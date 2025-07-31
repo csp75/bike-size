@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import nu.pattern.OpenCV
 import org.slf4j.LoggerFactory
 import java.io.File
+import kotlin.math.abs
 import kotlin.system.exitProcess
 import kotlin.system.measureTimeMillis
 
@@ -71,7 +72,9 @@ class BikeGeometryDetector {
         if (args.isNotEmpty() && !args[0].startsWith("--")) {
             inputPath = args[0]
             // Parse remaining arguments starting from index 1
-            outputPath = parseRemainingArguments(args, 1)
+            val parseResult = parseRemainingArguments(args, 1)
+            outputPath = parseResult.first
+            debugMode = parseResult.second
         } else {
             // Original parsing logic for --input format
             var i = 0
@@ -90,6 +93,9 @@ class BikeGeometryDetector {
                         } else {
                             throw IllegalArgumentException("--output requires a value")
                         }
+                    }
+                    "--debug" -> {
+                        debugMode = true
                     }
                     "--help", "-h" -> {
                         printUsage()
@@ -113,15 +119,17 @@ class BikeGeometryDetector {
         
         return AppConfig(
             inputPath = inputPath,
-            outputPath = outputDir
+            outputPath = outputDir,
+            debugMode = debugMode
         )
     }
 
     /**
      * Parses remaining arguments after the first path/URL argument.
      */
-    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): String? {
+    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): Pair<String?, Boolean> {
         var output: String? = null
+        var debugMode = false
         
         var i = startIndex
         while (i < args.size) {
@@ -134,7 +142,7 @@ class BikeGeometryDetector {
                     }
                 }
                 "--debug" -> {
-                    // Debug mode flag handled, but not used in this simple parser
+                    debugMode = true
                 }
                 "--help", "-h" -> {
                     printUsage()
@@ -147,7 +155,7 @@ class BikeGeometryDetector {
             i++
         }
         
-        return output
+        return Pair(output, debugMode)
     }
 
     /**
@@ -186,6 +194,12 @@ class BikeGeometryDetector {
     private fun processImage(config: AppConfig) {
         logger.info("Processing image: ${config.inputPath}")
         
+        if (config.debugMode) {
+            logger.info("Debug mode enabled - intermediate images and verbose output will be saved")
+            // Ensure output directory exists
+            File(config.outputPath).mkdirs()
+        }
+        
         // Initialize components
         val imageLoader = ImageLoader()
         val wheelDetector = WheelDetector()
@@ -206,6 +220,9 @@ class BikeGeometryDetector {
                 logger.warn("No wheels detected in the image")
             } else {
                 logger.info("Detected ${detectedWheels.size} wheels")
+                if (config.debugMode) {
+                    outputWheelDetectionDetails(detectedWheels, config)
+                }
             }
             
             // Step 3: Detect frame tubes
@@ -216,6 +233,9 @@ class BikeGeometryDetector {
                 logger.warn("No frame tubes detected in the image")
             } else {
                 logger.info("Detected ${detectedFrameLines.size} frame lines")
+                if (config.debugMode) {
+                    outputFrameDetectionDetails(detectedFrameLines, config)
+                }
             }
             
             // Step 4: Calculate geometry measurements
@@ -321,6 +341,78 @@ class BikeGeometryDetector {
         }
         
         println("=".repeat(50))
+    }
+
+    /**
+     * Outputs detailed wheel detection information in debug mode.
+     */
+    private fun outputWheelDetectionDetails(wheels: List<DetectedCircle>, config: AppConfig) {
+        val detailsText = buildString {
+            appendLine("=== WHEEL DETECTION DETAILS ===")
+            appendLine("Total wheels detected: ${wheels.size}")
+            appendLine()
+            wheels.forEachIndexed { index, wheel ->
+                appendLine("Wheel ${index + 1}:")
+                appendLine("  Position: (${wheel.x.toInt()}, ${wheel.y.toInt()})")
+                appendLine("  Radius: ${wheel.radius.toInt()} pixels")
+                appendLine("  Diameter: ${(wheel.radius * 2).toInt()} pixels")
+                appendLine("  Confidence: ${"%.3f".format(wheel.confidence)}")
+                appendLine()
+            }
+            if (wheels.size >= 2) {
+                val leftWheel = wheels.minByOrNull { it.x }
+                val rightWheel = wheels.maxByOrNull { it.x }
+                if (leftWheel != null && rightWheel != null) {
+                    val wheelbasePixels = abs(rightWheel.x - leftWheel.x)
+                    appendLine("Calculated wheelbase: ${wheelbasePixels.toInt()} pixels")
+                    appendLine("Average wheel diameter: ${wheels.map { it.radius * 2 }.average().toInt()} pixels")
+                }
+            }
+            appendLine("=== END WHEEL DETECTION DETAILS ===")
+        }
+        
+        logger.info("Debug: Wheel detection details:\n$detailsText")
+        
+        // Save detailed text output
+        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "wheel_details", "txt")
+        File(debugTextPath).writeText(detailsText)
+        logger.info("Debug: Saved wheel detection details to: $debugTextPath")
+    }
+    
+    /**
+     * Outputs detailed frame detection information in debug mode.
+     */
+    private fun outputFrameDetectionDetails(frameLines: List<DetectedLine>, config: AppConfig) {
+        val detailsText = buildString {
+            appendLine("=== FRAME DETECTION DETAILS ===")
+            appendLine("Total frame lines detected: ${frameLines.size}")
+            appendLine()
+            frameLines.forEachIndexed { index, line ->
+                appendLine("Frame Line ${index + 1}:")
+                appendLine("  Start point: (${line.x1.toInt()}, ${line.y1.toInt()})")
+                appendLine("  End point: (${line.x2.toInt()}, ${line.y2.toInt()})")
+                appendLine("  Length: ${"%.1f".format(line.length)} pixels")
+                appendLine("  Angle: ${"%.1f".format(line.angle)}°")
+                appendLine("  Confidence: ${"%.3f".format(line.confidence)}")
+                appendLine()
+            }
+            
+            // Group lines by approximate angle for analysis
+            val angleGroups = frameLines.groupBy { (it.angle / 15).toInt() * 15 }
+            appendLine("Lines grouped by angle (±15°):")
+            angleGroups.forEach { (angle, lines) ->
+                appendLine("  ~${angle}°: ${lines.size} lines")
+            }
+            
+            appendLine("=== END FRAME DETECTION DETAILS ===")
+        }
+        
+        logger.info("Debug: Frame detection details:\n$detailsText")
+        
+        // Save detailed text output
+        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "frame_details", "txt")
+        File(debugTextPath).writeText(detailsText)
+        logger.info("Debug: Saved frame detection details to: $debugTextPath")
     }
 
     /**
