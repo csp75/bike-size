@@ -2,8 +2,11 @@ package com.bikesize
 
 import org.opencv.core.Mat
 import org.opencv.core.Point
+import org.opencv.core.Scalar
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import org.slf4j.LoggerFactory
+import java.io.File
 import kotlin.math.*
 
 /**
@@ -13,12 +16,22 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
     private val logger = LoggerFactory.getLogger(WheelDetector::class.java)
 
     /**
+     * Generates debug filename based on base image name.
+     */
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+        val baseFile = File(baseImagePath)
+        val baseName = baseFile.nameWithoutExtension
+        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
+    }
+
+    /**
      * Detects wheels in the preprocessed image.
      * 
      * @param imageData The loaded and preprocessed image data
+     * @param config Application configuration including debug settings
      * @return List of detected circles representing wheels
      */
-    fun detectWheels(imageData: ImageLoader.ImageData): List<DetectedCircle> {
+    fun detectWheels(imageData: ImageLoader.ImageData, appConfig: BikeGeometryDetector.AppConfig): List<DetectedCircle> {
         logger.info("Starting wheel detection using HoughCircles")
         
         val circles = Mat()
@@ -87,6 +100,23 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
         val sortedCircles = detectedCircles.sortedByDescending { it.confidence }
         
         logger.info("Detected ${sortedCircles.size} circles")
+        
+        // Save debug image with all detected circles if debug mode is enabled
+        if (appConfig.debugMode) {
+            val debugImage = imageData.original.clone()
+            for (circle in sortedCircles) {
+                // Draw circle outline in green
+                Imgproc.circle(debugImage, Point(circle.x.toDouble(), circle.y.toDouble()), 
+                              circle.radius.toInt(), Scalar(0.0, 255.0, 0.0), 2)
+                // Draw center point in red
+                Imgproc.circle(debugImage, Point(circle.x.toDouble(), circle.y.toDouble()), 
+                              3, Scalar(0.0, 0.0, 255.0), -1)
+            }
+            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "wheel_detection")
+            if (Imgcodecs.imwrite(debugPath, debugImage)) {
+                logger.info("Debug: Saved wheel detection image with ${sortedCircles.size} circles to: $debugPath")
+            }
+        }
         
         // Filter to get the two most likely wheels
         val validatedWheels = validateWheelDetection(sortedCircles, imageData)

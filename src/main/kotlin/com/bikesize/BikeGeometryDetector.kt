@@ -65,6 +65,7 @@ class BikeGeometryDetector {
     private fun parseArguments(args: Array<String>): AppConfig {
         var inputPath: String? = null
         var outputPath: String? = null
+        var debugMode = false
         
         // Check if first argument is a direct path/URL (doesn't start with --)
         if (args.isNotEmpty() && !args[0].startsWith("--")) {
@@ -132,6 +133,9 @@ class BikeGeometryDetector {
                         throw IllegalArgumentException("--output requires a value")
                     }
                 }
+                "--debug" -> {
+                    debugMode = true
+                }
                 "--help", "-h" -> {
                     printUsage()
                     exitProcess(0)
@@ -143,7 +147,19 @@ class BikeGeometryDetector {
             i++
         }
         
-        return output
+        if (inputPath == null) {
+            logger.error("Input path is required")
+            printUsage()
+            exitProcess(1)
+        }
+        
+        val outputDir = outputPath ?: "./results"
+        
+        return AppConfig(
+            inputPath = inputPath,
+            outputPath = outputDir,
+            debugMode = debugMode
+        )
     }
 
     /**
@@ -153,21 +169,27 @@ class BikeGeometryDetector {
         println("""
             Bike Geometry Detector
             
-            Usage: 
-              java -jar bike-geometry-detector.jar <image_path_or_url> [--output <output_dir>]
-              java -jar bike-geometry-detector.jar --input <image_path_or_url> [--output <output_dir>]
+            Usage: java -jar bike-geometry-detector.jar --input <image_path> [--output <output_dir>] [--debug]
             
             Options:
               <path_or_url>     Path to input bicycle image or image URL (if first argument)
               --input <path>    Path to input bicycle image or image URL (required if not first argument)
               --output <path>   Output directory for results (default: ./results)
+              --debug           Enable verbose output and save intermediate images
               --help, -h        Show this help message
             
-            Examples:
-              java -jar bike-geometry-detector.jar ./samples/bike1.jpg
-              java -jar bike-geometry-detector.jar https://example.com/bike.jpg --output ./results/
-              java -jar bike-geometry-detector.jar --input ./samples/bike1.jpg --output ./results/
+            Example:
+              java -jar bike-geometry-detector.jar --input ./samples/bike1.jpg --output ./results/ --debug
         """.trimIndent())
+    }
+
+    /**
+     * Generates debug filename based on base image name.
+     */
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+        val baseFile = File(baseImagePath)
+        val baseName = baseFile.nameWithoutExtension
+        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
     }
 
     /**
@@ -186,11 +208,11 @@ class BikeGeometryDetector {
         try {
             // Step 1: Load and preprocess image
             logger.info("Step 1: Loading and preprocessing image")
-            val imageData = imageLoader.loadAndPreprocess(config.inputPath)
+            val imageData = imageLoader.loadAndPreprocess(config.inputPath, config)
             
             // Step 2: Detect wheels
             logger.info("Step 2: Detecting wheels")
-            val detectedWheels = wheelDetector.detectWheels(imageData)
+            val detectedWheels = wheelDetector.detectWheels(imageData, config)
             
             if (detectedWheels.isEmpty()) {
                 logger.warn("No wheels detected in the image")
@@ -200,7 +222,7 @@ class BikeGeometryDetector {
             
             // Step 3: Detect frame tubes
             logger.info("Step 3: Detecting frame tubes")
-            val detectedFrameLines = frameDetector.detectFrameLines(imageData, detectedWheels)
+            val detectedFrameLines = frameDetector.detectFrameLines(imageData, detectedWheels, config)
             
             if (detectedFrameLines.isEmpty()) {
                 logger.warn("No frame tubes detected in the image")
@@ -318,6 +340,7 @@ class BikeGeometryDetector {
      */
     data class AppConfig(
         val inputPath: String,
-        val outputPath: String
+        val outputPath: String,
+        val debugMode: Boolean = false
     )
 }

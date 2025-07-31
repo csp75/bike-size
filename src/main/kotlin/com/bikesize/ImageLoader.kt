@@ -21,9 +21,18 @@ class ImageLoader {
     private val httpClient = OkHttpClient()
 
     /**
-     * Loads an image from file path or URL and performs preprocessing.
+     */
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+        val baseFile = File(baseImagePath)
+        val baseName = baseFile.nameWithoutExtension
+        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
+    }
+
+    /**
+     * Loads an image from file and performs preprocessing.
      * 
-     * @param inputPath Path to the input image file or URL
+     * @param filePath Path to the input image file
+     * @param config Application configuration including debug settings
      * @return ImageData containing original and processed versions
      * @throws IllegalArgumentException if file doesn't exist or can't be loaded
      */
@@ -34,7 +43,7 @@ class ImageLoader {
         } else {
             validateLocalFile(inputPath)
             inputPath
-        }
+      }
 
         logger.info("Loading image from: $inputPath")
         
@@ -60,12 +69,28 @@ class ImageLoader {
         val grayscaleImage = Mat()
         Imgproc.cvtColor(originalImage, grayscaleImage, Imgproc.COLOR_BGR2GRAY)
         logger.debug("Converted to grayscale")
+        
+        // Save debug image if debug mode is enabled
+        if (appConfig.debugMode) {
+            val debugPath = generateDebugFilename(filePath, appConfig.outputPath, "grayscale")
+            if (Imgcodecs.imwrite(debugPath, grayscaleImage)) {
+                logger.info("Debug: Saved grayscale image to: $debugPath")
+            }
+        }
 
         // Apply Gaussian blur to reduce noise
         val blurredImage = Mat()
         val kernelSize = Size(5.0, 5.0)
         Imgproc.GaussianBlur(grayscaleImage, blurredImage, kernelSize, 0.0)
         logger.debug("Applied Gaussian blur with 5x5 kernel")
+        
+        // Save debug image if debug mode is enabled
+        if (appConfig.debugMode) {
+            val debugPath = generateDebugFilename(filePath, appConfig.outputPath, "blurred")
+            if (Imgcodecs.imwrite(debugPath, blurredImage)) {
+                logger.info("Debug: Saved blurred image to: $debugPath")
+            }
+        }
 
         return ImageData(
             original = originalImage,
