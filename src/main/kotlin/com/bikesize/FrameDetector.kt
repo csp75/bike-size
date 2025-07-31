@@ -1,8 +1,12 @@
 package com.bikesize
 
 import org.opencv.core.Mat
+import org.opencv.core.Point
+import org.opencv.core.Scalar
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import org.slf4j.LoggerFactory
+import java.io.File
 import kotlin.math.*
 
 /**
@@ -12,15 +16,26 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
     private val logger = LoggerFactory.getLogger(FrameDetector::class.java)
 
     /**
+     * Generates debug filename based on base image name.
+     */
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+        val baseFile = File(baseImagePath)
+        val baseName = baseFile.nameWithoutExtension
+        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
+    }
+
+    /**
      * Detects frame tubes in the preprocessed image.
      * 
      * @param imageData The loaded and preprocessed image data
      * @param wheelPositions Detected wheel positions to help filter relevant lines
+     * @param config Application configuration including debug settings
      * @return List of detected line segments representing frame tubes
      */
     fun detectFrameLines(
         imageData: ImageLoader.ImageData,
-        wheelPositions: List<DetectedCircle>
+        wheelPositions: List<DetectedCircle>,
+        appConfig: BikeGeometryDetector.AppConfig
     ): List<DetectedLine> {
         logger.info("Starting frame detection using Line Segment Detector")
         
@@ -30,6 +45,14 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
         // Apply Canny edge detection first for better line detection
         val edges = Mat()
         Imgproc.Canny(imageData.preprocessed, edges, 50.0, 150.0)
+        
+        // Save debug edge image if debug mode is enabled
+        if (appConfig.debugMode) {
+            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_edges")
+            if (Imgcodecs.imwrite(debugPath, edges)) {
+                logger.info("Debug: Saved edge detection image to: $debugPath")
+            }
+        }
         
         // Detect lines using HoughLinesP (Probabilistic Hough Transform)
         Imgproc.HoughLinesP(
@@ -65,6 +88,22 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
         }
 
         logger.info("Detected ${detectedLines.size} line segments")
+        
+        // Save debug image with all detected lines if debug mode is enabled
+        if (appConfig.debugMode) {
+            val debugImage = imageData.original.clone()
+            for (line in detectedLines) {
+                // Draw line in blue
+                Imgproc.line(debugImage, 
+                           Point(line.x1.toDouble(), line.y1.toDouble()),
+                           Point(line.x2.toDouble(), line.y2.toDouble()),
+                           Scalar(255.0, 0.0, 0.0), 2)
+            }
+            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_lines")
+            if (Imgcodecs.imwrite(debugPath, debugImage)) {
+                logger.info("Debug: Saved frame lines detection image with ${detectedLines.size} lines to: $debugPath")
+            }
+        }
         
         // Filter and group lines to identify main frame tubes
         val frameLines = filterAndGroupLines(detectedLines, imageData, wheelPositions)

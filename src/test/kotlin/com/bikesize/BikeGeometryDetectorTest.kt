@@ -41,8 +41,13 @@ class BikeGeometryDetectorTest {
     @Test
     fun `test ImageLoader with non-existent file`() {
         val imageLoader = ImageLoader()
+        val mockConfig = BikeGeometryDetector.AppConfig(
+            inputPath = "non_existent_file.jpg",
+            outputPath = "./results",
+            debugMode = false
+        )
         assertThrows<IllegalArgumentException> {
-            imageLoader.loadAndPreprocess("non_existent_file.jpg")
+            imageLoader.loadAndPreprocess("non_existent_file.jpg", mockConfig)
         }
     }
 
@@ -112,6 +117,25 @@ class BikeGeometryDetectorTest {
         val outputPath = visualizer.generateOutputFilename("/path/to/bike.jpg", "./results")
         assertTrue(outputPath.contains("bike_detected.jpg"))
         assertTrue(outputPath.contains("results"))
+    }
+
+    @Test
+    fun `test AppConfig debug mode defaults to false`() {
+        val config = BikeGeometryDetector.AppConfig(
+            inputPath = "test.jpg",
+            outputPath = "./results"
+        )
+        assertEquals(false, config.debugMode)
+    }
+
+    @Test
+    fun `test AppConfig debug mode can be set to true`() {
+        val config = BikeGeometryDetector.AppConfig(
+            inputPath = "test.jpg",
+            outputPath = "./results",
+            debugMode = true
+        )
+        assertEquals(true, config.debugMode)
     }
 
     private fun createMockImageData(): ImageLoader.ImageData {
