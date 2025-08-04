@@ -190,35 +190,7 @@ class BikeGeometryDetector {
         """.trimIndent())
     }
 
-    /**
-     * Generates debug filename based on base image name.
-     */
-    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg", overwrite: Boolean = false): String {
-        val baseFile = File(baseImagePath)
-        val baseName = baseFile.nameWithoutExtension
-        return generateVersionedFilename(outputDir, "${baseName}_${suffix}", extension, overwrite)
-    }
 
-    /**
-     * Generates a versioned filename that either overwrites or adds incrementing suffix.
-     */
-    private fun generateVersionedFilename(outputDir: String, baseName: String, extension: String, overwrite: Boolean): String {
-        val baseFile = File(outputDir, "$baseName.$extension")
-        
-        if (overwrite || !baseFile.exists()) {
-            return baseFile.absolutePath
-        }
-        
-        // File exists and overwrite is false, find next available version
-        var counter = 1
-        var versionedFile: File
-        do {
-            versionedFile = File(outputDir, "$baseName-$counter.$extension")
-            counter++
-        } while (versionedFile.exists())
-        
-        return versionedFile.absolutePath
-    }
 
     /**
      * Main image processing pipeline.
@@ -359,7 +331,7 @@ class BikeGeometryDetector {
         
         // Save to file with image-prefixed name and versioning
         val baseName = inputFile.nameWithoutExtension
-        val jsonFilePath = generateVersionedFilename(config.outputPath, "${baseName}_results", "json", config.overwrite)
+        val jsonFilePath = FileUtils.generateVersionedFilename(config.outputPath, "${baseName}_results", "json", config.overwrite)
         val jsonFile = File(jsonFilePath)
         jsonFile.parentFile?.mkdirs()
         jsonFile.writeText(jsonString)
@@ -426,7 +398,7 @@ class BikeGeometryDetector {
         logger.info("Debug: Wheel detection details:\n$detailsText")
         
         // Save detailed text output
-        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "wheel_details", "txt", config.overwrite)
+        val debugTextPath = FileUtils.generateDebugFilename(config.inputPath, config.outputPath, "wheel_details", "txt", config.overwrite)
         File(debugTextPath).writeText(detailsText)
         logger.info("Debug: Saved wheel detection details to: $debugTextPath")
     }
@@ -462,7 +434,7 @@ class BikeGeometryDetector {
         logger.info("Debug: Frame detection details:\n$detailsText")
         
         // Save detailed text output
-        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "frame_details", "txt", config.overwrite)
+        val debugTextPath = FileUtils.generateDebugFilename(config.inputPath, config.outputPath, "frame_details", "txt", config.overwrite)
         File(debugTextPath).writeText(detailsText)
         logger.info("Debug: Saved frame detection details to: $debugTextPath")
     }
