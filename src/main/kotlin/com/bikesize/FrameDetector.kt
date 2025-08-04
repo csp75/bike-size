@@ -16,12 +16,33 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
     private val logger = LoggerFactory.getLogger(FrameDetector::class.java)
 
     /**
-     * Generates debug filename based on base image name.
+     * Generates debug filename based on base image name with versioning support.
      */
-    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg", overwrite: Boolean = false): String {
         val baseFile = File(baseImagePath)
         val baseName = baseFile.nameWithoutExtension
-        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
+        return generateVersionedFilename(outputDir, "${baseName}_${suffix}", extension, overwrite)
+    }
+
+    /**
+     * Generates a versioned filename that either overwrites or adds incrementing suffix.
+     */
+    private fun generateVersionedFilename(outputDir: String, baseName: String, extension: String, overwrite: Boolean): String {
+        val baseFile = File(outputDir, "$baseName.$extension")
+        
+        if (overwrite || !baseFile.exists()) {
+            return baseFile.absolutePath
+        }
+        
+        // File exists and overwrite is false, find next available version
+        var counter = 1
+        var versionedFile: File
+        do {
+            versionedFile = File(outputDir, "$baseName-$counter.$extension")
+            counter++
+        } while (versionedFile.exists())
+        
+        return versionedFile.absolutePath
     }
 
     /**
@@ -48,7 +69,7 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
         
         // Save debug edge image if debug mode is enabled
         if (appConfig.debugMode) {
-            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_edges")
+            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_edges", "jpg", appConfig.overwrite)
             if (Imgcodecs.imwrite(debugPath, edges)) {
                 logger.info("Debug: Saved edge detection image to: $debugPath")
             }
@@ -99,7 +120,7 @@ class FrameDetector(private val config: DetectionConfig = DetectionConfig()) {
                            Point(line.x2.toDouble(), line.y2.toDouble()),
                            Scalar(255.0, 0.0, 0.0), 2)
             }
-            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_lines")
+            val debugPath = generateDebugFilename(imageData.filePath, appConfig.outputPath, "frame_lines", "jpg", appConfig.overwrite)
             if (Imgcodecs.imwrite(debugPath, debugImage)) {
                 logger.info("Debug: Saved frame lines detection image with ${detectedLines.size} lines to: $debugPath")
             }

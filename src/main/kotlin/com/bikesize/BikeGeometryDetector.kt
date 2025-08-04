@@ -67,6 +67,7 @@ class BikeGeometryDetector {
         var inputPath: String? = null
         var outputPath: String? = null
         var debugMode = false
+        var overwrite = false
         
         // Check if first argument is a direct path/URL (doesn't start with --)
         if (args.isNotEmpty() && !args[0].startsWith("--")) {
@@ -75,6 +76,7 @@ class BikeGeometryDetector {
             val parseResult = parseRemainingArguments(args, 1)
             outputPath = parseResult.first
             debugMode = parseResult.second
+            overwrite = parseResult.third
         } else {
             // Original parsing logic for --input format
             var i = 0
@@ -96,6 +98,9 @@ class BikeGeometryDetector {
                     }
                     "--debug" -> {
                         debugMode = true
+                    }
+                    "--overwrite" -> {
+                        overwrite = true
                     }
                     "--help", "-h" -> {
                         printUsage()
@@ -120,16 +125,18 @@ class BikeGeometryDetector {
         return AppConfig(
             inputPath = inputPath,
             outputPath = outputDir,
-            debugMode = debugMode
+            debugMode = debugMode,
+            overwrite = overwrite
         )
     }
 
     /**
      * Parses remaining arguments after the first path/URL argument.
      */
-    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): Pair<String?, Boolean> {
+    private fun parseRemainingArguments(args: Array<String>, startIndex: Int): Triple<String?, Boolean, Boolean> {
         var output: String? = null
         var debugMode = false
+        var overwrite = false
         
         var i = startIndex
         while (i < args.size) {
@@ -144,6 +151,9 @@ class BikeGeometryDetector {
                 "--debug" -> {
                     debugMode = true
                 }
+                "--overwrite" -> {
+                    overwrite = true
+                }
                 "--help", "-h" -> {
                     printUsage()
                     exitProcess(0)
@@ -155,7 +165,7 @@ class BikeGeometryDetector {
             i++
         }
         
-        return Pair(output, debugMode)
+        return Triple(output, debugMode, overwrite)
     }
 
     /**
@@ -165,27 +175,49 @@ class BikeGeometryDetector {
         println("""
             Bike Geometry Detector
             
-            Usage: java -jar bike-geometry-detector.jar --input <image_path> [--output <output_dir>] [--debug]
+            Usage: java -jar bike-geometry-detector.jar --input <image_path> [--output <output_dir>] [--debug] [--overwrite]
             
             Options:
               <path_or_url>     Path to input bicycle image or image URL (if first argument)
               --input <path>    Path to input bicycle image or image URL (required if not first argument)
               --output <path>   Output directory for results (default: ./results)
               --debug           Enable verbose output and save intermediate images
+              --overwrite       Overwrite existing files without versioning (default: false)
               --help, -h        Show this help message
             
             Example:
-              java -jar bike-geometry-detector.jar --input ./samples/bike1.jpg --output ./results/ --debug
+              java -jar bike-geometry-detector.jar --input ./samples/bike1.jpg --output ./results/ --debug --overwrite
         """.trimIndent())
     }
 
     /**
      * Generates debug filename based on base image name.
      */
-    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg"): String {
+    private fun generateDebugFilename(baseImagePath: String, outputDir: String, suffix: String, extension: String = "jpg", overwrite: Boolean = false): String {
         val baseFile = File(baseImagePath)
         val baseName = baseFile.nameWithoutExtension
-        return File(outputDir, "${baseName}_${suffix}.${extension}").absolutePath
+        return generateVersionedFilename(outputDir, "${baseName}_${suffix}", extension, overwrite)
+    }
+
+    /**
+     * Generates a versioned filename that either overwrites or adds incrementing suffix.
+     */
+    private fun generateVersionedFilename(outputDir: String, baseName: String, extension: String, overwrite: Boolean): String {
+        val baseFile = File(outputDir, "$baseName.$extension")
+        
+        if (overwrite || !baseFile.exists()) {
+            return baseFile.absolutePath
+        }
+        
+        // File exists and overwrite is false, find next available version
+        var counter = 1
+        var versionedFile: File
+        do {
+            versionedFile = File(outputDir, "$baseName-$counter.$extension")
+            counter++
+        } while (versionedFile.exists())
+        
+        return versionedFile.absolutePath
     }
 
     /**
@@ -261,7 +293,7 @@ class BikeGeometryDetector {
             
             // Step 7: Generate visualization
             logger.info("Step 5: Generating visualization")
-            val outputImagePath = visualizer.generateOutputFilename(config.inputPath, config.outputPath)
+            val outputImagePath = visualizer.generateOutputFilename(config.inputPath, config.outputPath, config.overwrite)
             visualizer.createAnnotatedImage(imageData, detectionResults, outputImagePath)
             
             // Step 8: Output results
@@ -280,26 +312,44 @@ class BikeGeometryDetector {
      * Outputs detection results in JSON format.
      */
     private fun outputResults(results: DetectionResults, config: AppConfig) {
-        // Create JSON output
+        // Get image name from input path
+        val inputFile = File(config.inputPath)
+        val imageName = inputFile.name
+        
+        // Create JSON output with new structure
         val jsonOutput = mapOf(
-            "detection_results" to mapOf(
-                "wheels_found" to results.wheelsFound,
-                "wheel_positions" to results.wheelPositions.map { wheel ->
+            "image_name" to imageName,
+            "wheels" to mapOf(
+                "count" to results.wheelsFound,
+                "positions" to results.wheelPositions.map { wheel ->
                     mapOf(
                         "x" to wheel.x.toInt(),
                         "y" to wheel.y.toInt(),
-                        "radius" to wheel.radius.toInt()
+                        "radius" to wheel.radius.toInt(),
+                        "confidence" to "%.3f".format(wheel.confidence)
                     )
                 },
-                "frame_tubes_found" to results.frameTubesFound,
-                "measurements" to mapOf(
-                    "wheelbase_pixels" to results.measurements.wheelbasePixels.toInt(),
-                    "average_wheel_diameter_pixels" to results.measurements.averageWheelDiameterPixels.toInt()
-                ),
-                "confidence_scores" to mapOf(
-                    "wheel_detection" to "%.2f".format(results.confidenceScores.wheelDetection),
-                    "frame_detection" to "%.2f".format(results.confidenceScores.frameDetection)
-                )
+                "confidence" to "%.2f".format(results.confidenceScores.wheelDetection)
+            ),
+            "frame" to mapOf(
+                "tubes_count" to results.frameTubesFound,
+                "lines" to results.frameLines.map { line ->
+                    mapOf(
+                        "x1" to line.x1.toInt(),
+                        "y1" to line.y1.toInt(),
+                        "x2" to line.x2.toInt(),
+                        "y2" to line.y2.toInt(),
+                        "length" to "%.1f".format(line.length),
+                        "angle" to "%.1f".format(line.angle),
+                        "confidence" to "%.3f".format(line.confidence)
+                    )
+                },
+                "confidence" to "%.2f".format(results.confidenceScores.frameDetection)
+            ),
+            "measurements" to mapOf(
+                "wheelbase_pixels" to results.measurements.wheelbasePixels.toInt(),
+                "average_wheel_diameter_pixels" to results.measurements.averageWheelDiameterPixels.toInt(),
+                "perspective_correction_factor" to "%.2f".format(results.measurements.perspectiveCorrectionFactor)
             )
         )
         
@@ -307,8 +357,10 @@ class BikeGeometryDetector {
         val jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonOutput)
         println(jsonString)
         
-        // Save to file
-        val jsonFile = File(config.outputPath, "detection_results.json")
+        // Save to file with image-prefixed name and versioning
+        val baseName = inputFile.nameWithoutExtension
+        val jsonFilePath = generateVersionedFilename(config.outputPath, "${baseName}_results", "json", config.overwrite)
+        val jsonFile = File(jsonFilePath)
         jsonFile.parentFile?.mkdirs()
         jsonFile.writeText(jsonString)
         
@@ -374,7 +426,7 @@ class BikeGeometryDetector {
         logger.info("Debug: Wheel detection details:\n$detailsText")
         
         // Save detailed text output
-        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "wheel_details", "txt")
+        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "wheel_details", "txt", config.overwrite)
         File(debugTextPath).writeText(detailsText)
         logger.info("Debug: Saved wheel detection details to: $debugTextPath")
     }
@@ -410,7 +462,7 @@ class BikeGeometryDetector {
         logger.info("Debug: Frame detection details:\n$detailsText")
         
         // Save detailed text output
-        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "frame_details", "txt")
+        val debugTextPath = generateDebugFilename(config.inputPath, config.outputPath, "frame_details", "txt", config.overwrite)
         File(debugTextPath).writeText(detailsText)
         logger.info("Debug: Saved frame detection details to: $debugTextPath")
     }
@@ -421,6 +473,7 @@ class BikeGeometryDetector {
     data class AppConfig(
         val inputPath: String,
         val outputPath: String,
-        val debugMode: Boolean = false
+        val debugMode: Boolean = false,
+        val overwrite: Boolean = false
     )
 }
