@@ -265,6 +265,19 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
             logger.info("Debug: Saved enhanced wheel detection image with ${circles.size} circles to: $debugPath")
         }
     }
+    /**
+     * Calculates a confidence score for a detected circle based on its position and size within the image.
+     *
+     * The confidence is penalized for circles near the image edges, favored for circles in the lower portion
+     * of the image (where bicycle wheels are typically found), and adjusted based on whether the radius falls
+     * within an expected range for wheel sizes.
+     *
+     * @param x The x-coordinate of the circle center.
+     * @param y The y-coordinate of the circle center.
+     * @param radius The radius of the detected circle.
+     * @param imageData The image data containing width and height information.
+     * @return A confidence score between 0 and 1 indicating the likelihood that the circle represents a wheel.
+     */
     private fun calculateCircleConfidence(x: Float, y: Float, radius: Float, imageData: ImageLoader.ImageData): Float {
         var confidence = 1.0f
         
