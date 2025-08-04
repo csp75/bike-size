@@ -25,6 +25,9 @@ class WheelDetectionImprovementTest {
         fun setup() {
             OpenCV.loadShared()
         }
+        
+        private const val MAX_EXPECTED_CIRCLES = 10 // Maximum expected circles to be detected (improvement goal)
+        private const val WHEEL_GROUPING_DISTANCE_THRESHOLD = 100.0 // Distance threshold for grouping wheels
     }
 
     @Test

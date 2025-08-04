@@ -10,6 +10,23 @@ enum class WheelComponent {
 }
 
 /**
+ * Enum for bicycle frame component types.
+ */
+enum class FrameComponent {
+    SEAT_STAY_LEFT,     // Left seat stay
+    SEAT_STAY_RIGHT,    // Right seat stay
+    CHAIN_STAY_LEFT,    // Left chain stay  
+    CHAIN_STAY_RIGHT,   // Right chain stay
+    SEAT_TUBE,          // Seat tube
+    TOP_TUBE,           // Top tube
+    DOWN_TUBE,          // Down tube
+    HEAD_TUBE,          // Head tube
+    FORK,               // Fork (can be slightly bent)
+    SEATPOST,           // Seatpost (extension of seat tube)
+    UNKNOWN             // Unclassified frame line
+}
+
+/**
  * Data class representing a detected circle (wheel).
  */
 data class DetectedCircle(
@@ -31,7 +48,9 @@ data class DetectedLine(
     val y2: Float,
     val length: Float,
     val angle: Float,
-    val confidence: Float = 1.0f
+    val confidence: Float = 1.0f,
+    val component: FrameComponent = FrameComponent.UNKNOWN,
+    val geometryScore: Float = 0.0f  // Score based on bicycle geometry rules
 )
 
 /**
@@ -79,5 +98,10 @@ data class DetectionConfig(
     // New parameters for concentric circle detection
     val concentricCircleToleranceRatio: Double = 0.15, // tolerance for rim/tire radius difference
     val minConcentricRadiusDiff: Double = 0.02, // minimum radius difference for concentric detection
-    val maxConcentricRadiusDiffRatio: Double = 0.4 // maximum radius difference ratio for concentric detection
+    val maxConcentricRadiusDiffRatio: Double = 0.4, // maximum radius difference ratio for concentric detection
+    // New parameters for bicycle frame detection
+    val frameComponentLengthThreshold: Double = 0.7, // threshold for matching component lengths
+    val frameComponentAngleThreshold: Double = 0.6, // threshold for matching component angles (in radians)
+    val frameMinComponentLength: Double = 0.05, // minimum component length as fraction of image diagonal
+    val frameMaxHeadTubeRatio: Double = 0.3 // head tube should be significantly shorter than other tubes
 )
