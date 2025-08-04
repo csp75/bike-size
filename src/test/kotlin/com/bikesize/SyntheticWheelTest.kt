@@ -70,7 +70,7 @@ class SyntheticWheelTest {
                 (wheel.x - wheelCenterX) * (wheel.x - wheelCenterX) + 
                 (wheel.y - wheelCenterY) * (wheel.y - wheelCenterY)
             )
-            distance < 50 // Allow 50 pixel tolerance
+            distance < PIXEL_TOLERANCE // Allow pixel tolerance
         }
         
         assertTrue(foundWheel != null, "No wheel found near expected position ($wheelCenterX, $wheelCenterY)")
