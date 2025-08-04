@@ -25,6 +25,8 @@ class SyntheticWheelTest {
         fun setup() {
             OpenCV.loadShared()
         }
+        
+        private const val PIXEL_TOLERANCE = 50.0 // Pixel tolerance for wheel position matching
     }
 
     @Test
