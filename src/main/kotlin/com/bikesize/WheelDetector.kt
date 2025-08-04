@@ -197,8 +197,8 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
         
         // Check radius difference (should be meaningful but not too large)
         val radiusDiff = abs(circle1.radius - circle2.radius)
-        val minRadiusDiff = imageData.height * config.minConcentricRadiusDiff
-        val maxRadiusDiff = avgRadius * config.maxConcentricRadiusDiffRatio // Max 40% difference
+        val minRadiusDiff = (imageData.height * config.minConcentricRadiusDiff).toFloat()
+        val maxRadiusDiff = (avgRadius * config.maxConcentricRadiusDiffRatio).toFloat() // Max 40% difference
         
         if (radiusDiff < minRadiusDiff || radiusDiff > maxRadiusDiff) {
             return 0.0f
