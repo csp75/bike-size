@@ -230,27 +230,6 @@ class Visualizer {
     fun generateOutputFilename(inputPath: String, outputDir: String, overwrite: Boolean = false): String {
         val inputFile = File(inputPath)
         val nameWithoutExt = inputFile.nameWithoutExtension
-        return generateVersionedFilename(outputDir, "${nameWithoutExt}_detected", "jpg", overwrite)
-    }
-
-    /**
-     * Generates a versioned filename that either overwrites or adds incrementing suffix.
-     */
-    private fun generateVersionedFilename(outputDir: String, baseName: String, extension: String, overwrite: Boolean): String {
-        val baseFile = File(outputDir, "$baseName.$extension")
-        
-        if (overwrite || !baseFile.exists()) {
-            return baseFile.absolutePath
-        }
-        
-        // File exists and overwrite is false, find next available version
-        var counter = 1
-        var versionedFile: File
-        do {
-            versionedFile = File(outputDir, "$baseName-$counter.$extension")
-            counter++
-        } while (versionedFile.exists())
-        
-        return versionedFile.absolutePath
+        return FileUtils.generateVersionedFilename(outputDir, "${nameWithoutExt}_detected", "jpg", overwrite)
     }
 }
