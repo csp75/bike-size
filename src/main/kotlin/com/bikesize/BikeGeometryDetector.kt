@@ -298,7 +298,9 @@ class BikeGeometryDetector {
                         "x" to wheel.x.toInt(),
                         "y" to wheel.y.toInt(),
                         "radius" to wheel.radius.toInt(),
-                        "confidence" to "%.3f".format(wheel.confidence)
+                        "confidence" to "%.3f".format(wheel.confidence),
+                        "component" to wheel.component.name.lowercase(),
+                        "has_concentric_partner" to (wheel.concentricPartner != null)
                     )
                 },
                 "confidence" to "%.2f".format(results.confidenceScores.wheelDetection)

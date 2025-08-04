@@ -25,6 +25,18 @@ class BikeGeometryDetectorTest {
         assertEquals(200f, circle.y)
         assertEquals(50f, circle.radius)
         assertEquals(0.8f, circle.confidence)
+        assertEquals(WheelComponent.UNKNOWN, circle.component)
+        assertEquals(null, circle.concentricPartner)
+    }
+
+    @Test
+    fun `test DetectedCircle with wheel component`() {
+        val rimCircle = DetectedCircle(100f, 200f, 40f, 0.9f, WheelComponent.RIM)
+        val tireCircle = DetectedCircle(100f, 200f, 50f, 0.8f, WheelComponent.TIRE, rimCircle)
+        
+        assertEquals(WheelComponent.TIRE, tireCircle.component)
+        assertEquals(rimCircle, tireCircle.concentricPartner)
+        assertEquals(WheelComponent.RIM, rimCircle.component)
     }
 
     @Test
@@ -103,17 +115,20 @@ class BikeGeometryDetectorTest {
     }
 
     @Test
-    fun `test DetectionConfig default values`() {
+    fun `test DetectionConfig updated values`() {
         val config = DetectionConfig()
         assertEquals(1.2, config.houghCirclesDp)
-        assertEquals(0.125, config.houghCirclesMinDist)
+        assertEquals(0.2, config.houghCirclesMinDist) // Updated from 0.125
         assertEquals(100.0, config.houghCirclesParam1)
-        assertEquals(30.0, config.houghCirclesParam2)
-        assertEquals(0.05, config.houghCirclesMinRadius)
-        assertEquals(0.33, config.houghCirclesMaxRadius)
+        assertEquals(50.0, config.houghCirclesParam2) // Updated from 30.0
+        assertEquals(0.08, config.houghCirclesMinRadius) // Updated from 0.05
+        assertEquals(0.3, config.houghCirclesMaxRadius) // Updated from 0.33
         assertEquals(20, config.minLineLength)
         assertEquals(10, config.maxLineGap)
         assertEquals(5.0, config.lineAngleTolerance)
+        // New concentric circle parameters
+        assertEquals(0.15, config.concentricCircleToleranceRatio)
+        assertEquals(0.02, config.minConcentricRadiusDiff)
     }
 
     @Test

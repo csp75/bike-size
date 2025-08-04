@@ -25,7 +25,7 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
      * @return List of detected circles representing wheels
      */
     fun detectWheels(imageData: ImageLoader.ImageData, appConfig: BikeGeometryDetector.AppConfig): List<DetectedCircle> {
-        logger.info("Starting wheel detection using HoughCircles")
+        logger.info("Starting wheel detection using HoughCircles with concentric circle analysis")
         
         val circles = Mat()
         val image = imageData.preprocessed
@@ -44,7 +44,7 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
         
         // Adjust param2 for wide images to be more sensitive
         val adaptiveParam2 = if (aspectRatio > 1.5) {
-            config.houghCirclesParam2 * 0.8 // More sensitive for wide images
+            config.houghCirclesParam2 * 0.9 // Slightly more sensitive for wide images
         } else {
             config.houghCirclesParam2
         }
@@ -94,33 +94,177 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
         
         logger.info("Detected ${sortedCircles.size} circles")
         
+        // Analyze concentric circles to identify wheel components
+        val wheelComponentCircles = analyzeConcentricCircles(sortedCircles, imageData)
+        
+        logger.info("Identified ${wheelComponentCircles.size} wheel component circles")
+        
         // Save debug image with all detected circles if debug mode is enabled
         if (appConfig.debugMode) {
-            val debugImage = imageData.original.clone()
-            for (circle in sortedCircles) {
-                // Draw circle outline in green
-                Imgproc.circle(debugImage, Point(circle.x.toDouble(), circle.y.toDouble()), 
-                              circle.radius.toInt(), Scalar(0.0, 255.0, 0.0), 2)
-                // Draw center point in red
-                Imgproc.circle(debugImage, Point(circle.x.toDouble(), circle.y.toDouble()), 
-                              3, Scalar(0.0, 0.0, 255.0), -1)
-            }
-            val debugPath = FileUtils.generateDebugFilename(imageData.filePath, appConfig.outputPath, "wheel_detection", "jpg", appConfig.overwrite)
-            if (Imgcodecs.imwrite(debugPath, debugImage)) {
-                logger.info("Debug: Saved wheel detection image with ${sortedCircles.size} circles to: $debugPath")
-            }
+            saveDebugImage(wheelComponentCircles, imageData, appConfig)
         }
         
         // Filter to get the two most likely wheels
-        val validatedWheels = validateWheelDetection(sortedCircles, imageData)
+        val validatedWheels = validateWheelDetection(wheelComponentCircles, imageData)
         
         logger.info("Validated ${validatedWheels.size} wheels")
         return validatedWheels
     }
 
     /**
-     * Calculates confidence score for a detected circle.
+     * Analyzes detected circles to identify concentric patterns (rim and tire).
      */
+    private fun analyzeConcentricCircles(
+        circles: List<DetectedCircle>,
+        imageData: ImageLoader.ImageData
+    ): List<DetectedCircle> {
+        val wheelComponents = mutableListOf<DetectedCircle>()
+        val processed = mutableSetOf<Int>()
+        
+        for (i in circles.indices) {
+            if (i in processed) continue
+            
+            val circle1 = circles[i]
+            var bestConcentricPair: Pair<DetectedCircle, DetectedCircle>? = null
+            var bestConcentricScore = 0.0f
+            
+            // Look for concentric circles
+            for (j in i + 1 until circles.size) {
+                if (j in processed) continue
+                
+                val circle2 = circles[j]
+                val concentricScore = calculateConcentricScore(circle1, circle2, imageData)
+                
+                if (concentricScore > bestConcentricScore && concentricScore > 0.7f) {
+                    bestConcentricScore = concentricScore
+                    val (outer, inner) = if (circle1.radius > circle2.radius) {
+                        Pair(circle1, circle2)
+                    } else {
+                        Pair(circle2, circle1)
+                    }
+                    bestConcentricPair = Pair(outer, inner)
+                }
+            }
+            
+            if (bestConcentricPair != null) {
+                // Found concentric circles - classify as tire (outer) and rim (inner)
+                val (outer, inner) = bestConcentricPair
+                val tireCircle = outer.copy(
+                    component = WheelComponent.TIRE,
+                    concentricPartner = inner
+                )
+                val rimCircle = inner.copy(
+                    component = WheelComponent.RIM,
+                    concentricPartner = outer
+                )
+                
+                wheelComponents.add(tireCircle)
+                wheelComponents.add(rimCircle)
+                
+                // Mark both circles as processed
+                processed.add(circles.indexOf(outer))
+                processed.add(circles.indexOf(inner))
+                
+                logger.debug("Found concentric pair: tire(${outer.x}, ${outer.y}, r=${outer.radius}) " +
+                           "rim(${inner.x}, ${inner.y}, r=${inner.radius}) score=$bestConcentricScore")
+            } else {
+                // Single circle - classify as unknown wheel component
+                wheelComponents.add(circle1.copy(component = WheelComponent.UNKNOWN))
+                processed.add(i)
+            }
+        }
+        
+        return wheelComponents.sortedByDescending { it.confidence }
+    }
+
+    /**
+     * Calculates how likely two circles are to be concentric (rim and tire).
+     */
+    private fun calculateConcentricScore(
+        circle1: DetectedCircle,
+        circle2: DetectedCircle,
+        imageData: ImageLoader.ImageData
+    ): Float {
+        // Check center distance
+        val centerDistance = sqrt((circle1.x - circle2.x).pow(2) + (circle1.y - circle2.y).pow(2))
+        val avgRadius = (circle1.radius + circle2.radius) / 2
+        
+        // Centers should be very close for concentric circles
+        val maxCenterDistance = avgRadius * config.concentricCircleToleranceRatio
+        if (centerDistance > maxCenterDistance) {
+            return 0.0f
+        }
+        
+        // Check radius difference (should be meaningful but not too large)
+        val radiusDiff = abs(circle1.radius - circle2.radius)
+        val minRadiusDiff = imageData.height * config.minConcentricRadiusDiff
+        val maxRadiusDiff = avgRadius * 0.4f // Max 40% difference
+        
+        if (radiusDiff < minRadiusDiff || radiusDiff > maxRadiusDiff) {
+            return 0.0f
+        }
+        
+        // Calculate score based on concentricity quality
+        val centerScore = 1.0f - (centerDistance / maxCenterDistance)
+        val radiusScore = 1.0f - (radiusDiff / maxRadiusDiff)
+        val confidenceScore = (circle1.confidence + circle2.confidence) / 2
+        
+        return (centerScore * 0.4f + radiusScore * 0.3f + confidenceScore * 0.3f).toFloat()
+    }
+
+    /**
+     * Saves debug image with enhanced visualization for wheel components.
+     */
+    private fun saveDebugImage(
+        circles: List<DetectedCircle>,
+        imageData: ImageLoader.ImageData,
+        appConfig: BikeGeometryDetector.AppConfig
+    ) {
+        val debugImage = imageData.original.clone()
+        
+        for (circle in circles) {
+            val centerPoint = Point(circle.x.toDouble(), circle.y.toDouble())
+            val radius = circle.radius.toInt()
+            
+            // Color-code by component type
+            val circleColor = when (circle.component) {
+                WheelComponent.TIRE -> Scalar(0.0, 255.0, 0.0)    // Green for tire
+                WheelComponent.RIM -> Scalar(0.0, 0.0, 255.0)     // Blue for rim
+                WheelComponent.UNKNOWN -> Scalar(255.0, 255.0, 0.0) // Yellow for unknown
+            }
+            
+            // Draw circle outline
+            Imgproc.circle(debugImage, centerPoint, radius, circleColor, 2)
+            
+            // Draw center point
+            Imgproc.circle(debugImage, centerPoint, 3, Scalar(255.0, 0.0, 0.0), -1)
+            
+            // Draw component label
+            val label = when (circle.component) {
+                WheelComponent.TIRE -> "T"
+                WheelComponent.RIM -> "R"
+                WheelComponent.UNKNOWN -> "?"
+            }
+            Imgproc.putText(
+                debugImage, label,
+                Point(circle.x.toDouble() - 10, circle.y.toDouble() - circle.radius - 10),
+                Imgproc.FONT_HERSHEY_SIMPLEX, 0.8, circleColor, 2
+            )
+            
+            // Connect concentric partners with a line
+            circle.concentricPartner?.let { partner ->
+                val partnerPoint = Point(partner.x.toDouble(), partner.y.toDouble())
+                Imgproc.line(debugImage, centerPoint, partnerPoint, Scalar(255.0, 0.0, 255.0), 1)
+            }
+        }
+        
+        val debugPath = FileUtils.generateDebugFilename(
+            imageData.filePath, appConfig.outputPath, "wheel_detection", "jpg", appConfig.overwrite
+        )
+        if (Imgcodecs.imwrite(debugPath, debugImage)) {
+            logger.info("Debug: Saved enhanced wheel detection image with ${circles.size} circles to: $debugPath")
+        }
+    }
     private fun calculateCircleConfidence(x: Float, y: Float, radius: Float, imageData: ImageLoader.ImageData): Float {
         var confidence = 1.0f
         
@@ -152,6 +296,7 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
 
     /**
      * Validates wheel detection results and filters to most likely wheels.
+     * Enhanced to work with wheel components (tire/rim pairs).
      */
     private fun validateWheelDetection(
         circles: List<DetectedCircle>,
@@ -162,29 +307,73 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
             return emptyList()
         }
 
-        if (circles.size == 1) {
-            logger.warn("Only one circle detected, expected two wheels")
-            return circles
+        // Group by wheel (tire/rim pairs or single unknown circles)
+        val wheelGroups = groupCirclesByWheel(circles)
+        
+        logger.debug("Found ${wheelGroups.size} wheel groups")
+
+        if (wheelGroups.size == 1) {
+            logger.warn("Only one wheel group detected, expected two wheels")
+            return wheelGroups.first()
         }
 
-        if (circles.size == 2) {
-            logger.info("Exactly two circles detected, validating as wheel pair")
-            return validateWheelPair(circles[0], circles[1], imageData)
+        if (wheelGroups.size == 2) {
+            logger.info("Exactly two wheel groups detected, validating as wheel pair")
+            val wheel1 = wheelGroups[0]
+            val wheel2 = wheelGroups[1]
+            return validateWheelPair(wheel1, wheel2, imageData)
         }
 
-        // More than 2 circles detected, find the best pair
-        logger.info("Multiple circles detected (${circles.size}), finding best wheel pair")
-        return findBestWheelPair(circles, imageData)
+        // More than 2 wheel groups detected, find the best pair
+        logger.info("Multiple wheel groups detected (${wheelGroups.size}), finding best wheel pair")
+        return findBestWheelPair(wheelGroups, imageData)
     }
 
     /**
-     * Validates that two detected circles form a reasonable wheel pair.
+     * Groups detected circles by wheel (tire/rim pairs or individual circles).
+     */
+    private fun groupCirclesByWheel(circles: List<DetectedCircle>): List<List<DetectedCircle>> {
+        val wheelGroups = mutableListOf<List<DetectedCircle>>()
+        val processed = mutableSetOf<DetectedCircle>()
+        
+        for (circle in circles) {
+            if (circle in processed) continue
+            
+            val wheelGroup = mutableListOf<DetectedCircle>()
+            wheelGroup.add(circle)
+            processed.add(circle)
+            
+            // If this circle has a concentric partner, add it to the group
+            circle.concentricPartner?.let { partner ->
+                if (partner in circles && partner !in processed) {
+                    wheelGroup.add(partner)
+                    processed.add(partner)
+                }
+            }
+            
+            wheelGroups.add(wheelGroup)
+        }
+        
+        return wheelGroups
+    }
+
+    /**
+     * Validates that two detected wheel groups form a reasonable wheel pair.
      */
     private fun validateWheelPair(
-        circle1: DetectedCircle,
-        circle2: DetectedCircle,
+        wheel1: List<DetectedCircle>,
+        wheel2: List<DetectedCircle>,
         imageData: ImageLoader.ImageData
     ): List<DetectedCircle> {
+        // Get representative circle for each wheel (prefer tire, fallback to largest)
+        val circle1 = wheel1.find { it.component == WheelComponent.TIRE } 
+                     ?: wheel1.maxByOrNull { it.radius } 
+                     ?: return emptyList()
+        
+        val circle2 = wheel2.find { it.component == WheelComponent.TIRE } 
+                     ?: wheel2.maxByOrNull { it.radius } 
+                     ?: return emptyList()
+        
         val distance = sqrt((circle1.x - circle2.x).pow(2) + (circle1.y - circle2.y).pow(2))
         val avgRadius = (circle1.radius + circle2.radius) / 2
         
@@ -204,33 +393,54 @@ class WheelDetector(private val config: DetectionConfig = DetectionConfig()) {
             logger.warn("Wheelbase distance ($distance) outside expected range ($minWheelbase-$maxWheelbase)")
         }
         
-        return listOf(circle1, circle2)
+        // Return all circles from both wheels
+        return wheel1 + wheel2
     }
 
     /**
-     * Finds the best pair of wheels from multiple detected circles.
+     * Finds the best pair of wheels from multiple detected wheel groups.
      */
     private fun findBestWheelPair(
-        circles: List<DetectedCircle>,
+        wheelGroups: List<List<DetectedCircle>>,
         imageData: ImageLoader.ImageData
     ): List<DetectedCircle> {
-        var bestPair: Pair<DetectedCircle, DetectedCircle>? = null
+        var bestPair: Pair<List<DetectedCircle>, List<DetectedCircle>>? = null
         var bestScore = 0.0f
         
-        for (i in circles.indices) {
-            for (j in i + 1 until circles.size) {
-                val circle1 = circles[i]
-                val circle2 = circles[j]
-                val score = calculatePairScore(circle1, circle2, imageData)
+        for (i in wheelGroups.indices) {
+            for (j in i + 1 until wheelGroups.size) {
+                val wheel1 = wheelGroups[i]
+                val wheel2 = wheelGroups[j]
+                val score = calculateWheelPairScore(wheel1, wheel2, imageData)
                 
                 if (score > bestScore) {
                     bestScore = score
-                    bestPair = Pair(circle1, circle2)
+                    bestPair = Pair(wheel1, wheel2)
                 }
             }
         }
         
-        return bestPair?.let { listOf(it.first, it.second) } ?: circles.take(2)
+        return bestPair?.let { it.first + it.second } ?: wheelGroups.take(2).flatten()
+    }
+
+    /**
+     * Calculates a score for how likely two wheel groups are to be a wheel pair.
+     */
+    private fun calculateWheelPairScore(
+        wheel1: List<DetectedCircle>,
+        wheel2: List<DetectedCircle>,
+        imageData: ImageLoader.ImageData
+    ): Float {
+        // Get representative circles
+        val circle1 = wheel1.find { it.component == WheelComponent.TIRE } 
+                     ?: wheel1.maxByOrNull { it.radius } 
+                     ?: return 0.0f
+        
+        val circle2 = wheel2.find { it.component == WheelComponent.TIRE } 
+                     ?: wheel2.maxByOrNull { it.radius } 
+                     ?: return 0.0f
+        
+        return calculatePairScore(circle1, circle2, imageData)
     }
 
     /**
