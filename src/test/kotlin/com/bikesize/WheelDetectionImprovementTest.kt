@@ -178,7 +178,7 @@ class WheelDetectionImprovementTest {
                     (wheel.y - otherWheel.y) * (wheel.y - otherWheel.y)
                 )
                 
-                if (distance < 200) {
+                if (distance < WHEEL_GROUPING_DISTANCE_THRESHOLD) {
                     group.add(otherWheel)
                     processed.add(otherWheel)
                 }
