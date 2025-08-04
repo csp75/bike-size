@@ -55,9 +55,9 @@ class WheelDetectionImprovementTest {
         // Validate improvements:
         // 1. Should detect reasonable number of circles (much less than 100+)
         assertTrue(
-            detectedWheels.size <= 20, 
+            detectedWheels.size <= MAX_EXPECTED_CIRCLES, 
             "Too many circles detected for $imageName: ${detectedWheels.size}. " +
-            "Expected <= 20 (improvement from 100+)"
+            "Expected <= $MAX_EXPECTED_CIRCLES (improvement from 100+)"
         )
         
         // 2. Should still correctly identify 2 wheels in final selection
