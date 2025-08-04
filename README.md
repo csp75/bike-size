@@ -183,7 +183,8 @@ src/main/kotlin/com/bikesize/
 ├── BikeGeometryDetector.kt    # Main application and CLI handling
 ├── DataModels.kt              # Data classes for detected components
 ├── ImageLoader.kt             # Image loading and preprocessing
-├── WheelDetector.kt           # Wheel detection using HoughCircles
+├── WheelDetector.kt           # Wheel detector interface
+├── OpenCvWheelDetector.kt     # OpenCV-based wheel detection implementation
 ├── FrameDetector.kt           # Frame tube detection using line segments
 ├── GeometryCalculator.kt      # Geometric measurements and calculations
 └── Visualizer.kt              # Annotated image generation

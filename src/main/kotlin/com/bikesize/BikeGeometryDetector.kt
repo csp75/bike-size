@@ -206,7 +206,7 @@ class BikeGeometryDetector {
         
         // Initialize components
         val imageLoader = ImageLoader()
-        val wheelDetector = WheelDetector()
+        val wheelDetector: WheelDetector = OpenCvWheelDetector()
         val frameDetector = FrameDetector()
         val geometryCalculator = GeometryCalculator()
         val visualizer = Visualizer()

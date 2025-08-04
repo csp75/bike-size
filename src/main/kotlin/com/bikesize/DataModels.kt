@@ -78,5 +78,6 @@ data class DetectionConfig(
     val lineAngleTolerance: Double = 5.0,
     // New parameters for concentric circle detection
     val concentricCircleToleranceRatio: Double = 0.15, // tolerance for rim/tire radius difference
-    val minConcentricRadiusDiff: Double = 0.02 // minimum radius difference for concentric detection
-)
+    val minConcentricRadiusDiff: Double = 0.02, // minimum radius difference for concentric detection
+    val maxConcentricRadiusDiffRatio: Double = 0.4
+ )
